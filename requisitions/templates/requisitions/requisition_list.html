@@ -1,0 +1,84 @@
+{% extends 'requisitions/base.html' %}
+{% block content %}
+
+<h2>
+  {% if request.user.is_staff %}
+    All Requisitions
+  {% else %}
+    Your Requisitions
+  {% endif %}
+</h2>
+
+{% if not request.user.is_staff %}
+  <div class="d-flex gap-2 mb-3">
+
+    <a href="{% url 'requisition_create' %}" class="btn btn-primary">
+        ➕ Create Requisition
+    </a>
+
+    <a href="{% url 'requisition_list' %}" class="btn btn-secondary">
+        📄 View My Requisitions
+    </a>
+
+</div>
+{% endif %}
+
+<table class="table table-striped table-bordered">
+  <thead>
+    <tr>
+      <th>ID</th>
+
+      {% if request.user.is_staff %}
+      <th>Requester</th>
+      <th>Department</th>
+      {% endif %}
+
+      <th>Created</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for r in requisitions %}
+      <tr {% if r.status == "deleted" %}class="table-danger"{% endif %}>
+        <td>{{ r.id }}</td>
+
+        {% if request.user.is_staff %}
+        <td>{{ r.requester.username }}</td>
+        <td>{{ r.department.name }}<td/>
+        {% endif %}
+
+        <td>{{ r.created|date:"Y-m-d H:i" }}</td>
+
+        <td>
+          {% if r.status == "approved" %}
+            <span class="badge bg-success">Approved</span>
+          {% elif r.status == "rejected" %}
+            <span class="badge bg-danger">Rejected</span>
+          {% elif r.status == "submitted" %}
+            <span class="badge bg-warning">Pending</span>
+          {% elif r.status == "deleted" %}
+            <span class="badge bg-danger">Deleted by {{ r.deleted_by.username }}</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ r.status }}</span>
+          {% endif %}
+        </td>
+
+        <td>
+          <a class="btn btn-sm btn-outline-secondary"
+             href="{% url 'requisition_detail' r.id %}">
+             View
+          </a>
+        </td>
+      </tr>
+
+    {% empty %}
+      <tr>
+        <td colspan="5">No requisitions</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

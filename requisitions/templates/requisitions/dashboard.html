@@ -1,0 +1,123 @@
+{% extends 'requisitions/base.html' %}
+
+{% block content %}
+
+<!-- Hover effect for clickable cards -->
+<style>
+.card:hover {
+    transform: scale(1.05);  /* Slightly grows the card */
+    transition: 0.2s;        /* Smooth animation */
+    cursor: pointer;          /* Shows pointer on hover */
+}
+</style>
+
+<h2 class="mb-4">Dashboard — Demand Insights</h2>
+
+<!-- ===== Statistics Cards ===== -->
+
+<div class="row text-center mb-4">
+
+  <div class="col-md-3">
+   <a href="{% url 'requisition_list' %}" style="text-decoration: none;">
+     <div class="card shadow p-3 text-center">
+       <h5>Total Requisitions</h5>
+       <h3>{{ total }}</h3>
+     </div>
+    </a>
+  </div>
+
+  <div class="col-md-3">
+    <a href="{% url 'requisition_list' %}?status=submitted" style="text-decoration: none;">
+      <div class="card bg-warning shadow p-3">
+       <h5>Pending Requests</h5>
+       <h3>{{ pending }}</h3>
+      </div>
+    <a/>
+  </div>
+
+  <div class="col-md-3">
+   <a href="{% url 'requisition_list' %}?status=approved" style="text-decoration: none;">
+     <div class="card bg-success text-white shadow p-3 text-center">
+       <h5>Approved Requests</h5>
+       <h3>{{ approved }}</h3>
+     </div>
+   </a>
+ </div>
+
+  <div class="col-md-3">
+   <a href="{% url 'requisition_list' %}?status=rejected" style="text-decoration: none;">
+     <div class="card bg-danger text-white shadow p-3 text-center">
+       <h5>Rejected Requests</h5>
+       <h3>{{ rejected }}</h3>
+     </div>
+   </a>
+ </div> 
+
+</div>
+
+<!-- ===== ACTION BUTTONS ===== -->
+
+{% if user.is_staff or user.profile.role == 'head' %}
+<div class="d-flex flex-wrap gap-3 mb-4">
+
+  <a href="{% url 'requisition_list' %}" class="btn btn-primary">
+    📄 View All Requisitions
+  </a>
+
+  <a href="{% url 'hod_view_stock' %}" class="btn btn-info">
+    📦 View Stock
+  </a>
+
+  <a href="{% url 'hod_print_requisitions' %}" class="btn btn-secondary">
+    🖨 Print Requisitions
+  </a>
+
+</div>
+{% endif %}
+
+<!-- ===== Demand Chart ===== -->
+
+<h4 class="mb-3">Item Demand Trends</h4>
+
+<canvas id="demandChart" width="800" height="350"></canvas>
+
+<script>
+fetch("{% url 'dashboard_data' %}")
+  .then(r => r.json())
+  .then(data => {
+
+    const ctx = document.getElementById('demandChart').getContext('2d');
+
+    const datasets = data.datasets.map(ds => ({
+      label: ds.label,
+      data: ds.data,
+      fill: false,
+      tension: 0.1
+    }));
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: datasets
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' }
+        }
+      }
+    });
+
+  });
+</script>
+
+<hr>
+
+<!-- ===== AI Forecast Section ===== -->
+
+<h4 class="mt-4">AI Demand Forecast</h4>
+
+<img src="{% url 'arima_forecast' %}" class="img-fluid">
+
+{% endblock %}

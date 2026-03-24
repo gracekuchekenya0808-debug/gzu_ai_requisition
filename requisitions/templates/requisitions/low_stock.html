@@ -1,0 +1,35 @@
+{% extends 'requisitions/base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <div class="card shadow-sm p-4">
+        <h2 class="mb-4">📦 Available Stock</h2>
+
+        <table class="table table-bordered table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Item Name</th>
+                    <th>Stock Left</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr {% if item.stock <= item.reorder_level %} class="table-danger" {% endif %}>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.stock }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center">No stock available</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+</div>
+{% endblock %}

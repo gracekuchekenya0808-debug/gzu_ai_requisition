@@ -1,0 +1,17 @@
+<h2>Stock in Department</h2>
+<table>
+    <tr>
+        <th>Item</th>
+        <th>SKU</th>
+        <th>Stock Left</th>
+        <th>Reorder Level</th>
+    </tr>
+    {% for item in items %}
+    <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.sku }}</td>
+        <td>{{ item.stock }}</td>
+        <td>{{ item.reorder_level }}</td>
+    </tr>
+    {% endfor %}
+</table>

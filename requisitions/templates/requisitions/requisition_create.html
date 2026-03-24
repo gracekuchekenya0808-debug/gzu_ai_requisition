@@ -1,0 +1,20 @@
+{% extends 'requisitions/base.html' %}
+{% block content %}
+<h2>Create Requisition</h2>
+<form method="post">{% csrf_token %}
+  {{ form.as_p }}
+  <h4>Items</h4>
+  {{ formset.management_form }}
+  <table class="table">
+    <thead><tr><th>Item</th><th>Qty</th><th>Delete</th></tr></thead>
+    <tbody>
+      {% for f in formset %}
+        <tr>
+          <td>{{ f.item }}</td><td>{{ f.quantity }}</td><td>{{ f.DELETE }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <button class="btn btn-primary" type="submit">Submit Requisition</button>
+</form>
+{% endblock %}

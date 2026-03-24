@@ -1,0 +1,57 @@
+{% extends 'requisitions/base.html' %}
+
+{% block content %}
+
+<h2 class="mb-4">Create Requisition</h2>
+
+<form method="post">
+    {% csrf_token %}
+
+    <!-- ✅ AUTO USER -->
+    <div class="mb-3">
+        <label><strong>Requester:</strong></label>
+        <input type="text" class="form-control" value="{{ user.username }}" readonly>
+    </div>
+
+    <!-- ✅ AUTO DEPARTMENT -->
+    <div class="mb-3">
+        <label><strong>Department:</strong></label>
+        <input type="text" class="form-control" value="{{ user.profile.department }}" readonly>
+    </div>
+
+    <!-- ✅ MAIN FORM (date + notes) -->
+    <div class="card p-3 mb-4 shadow-sm">
+        {{ form.as_p }}
+    </div>
+
+    <!-- ✅ ITEMS -->
+    <h4>Items</h4>
+
+    {{ formset.management_form }}
+
+    {% for item_form in formset %}
+        <div class="card p-3 mb-3 shadow-sm">
+            <div class="row">
+
+                <div class="col-md-6">
+                    <label>{{ item_form.item.label }}</label>
+                    {{ item_form.item }}
+                </div>
+
+                <div class="col-md-6">
+                    <label>{{ item_form.quantity.label }}</label>
+                    {{ item_form.quantity }}
+                </div>
+
+            </div>
+        </div>
+    {% endfor %}
+
+    <!-- ✅ SUBMIT -->
+    <button type="submit" class="btn btn-success">
+        Submit Requisition
+    </button>
+
+</form>
+
+{% endblock %}

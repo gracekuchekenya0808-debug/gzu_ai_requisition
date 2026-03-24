@@ -1,0 +1,23 @@
+{% extends "requisitions/base.html" %}
+
+{% block content %}
+
+<div class="container" style="max-width:400px">
+
+<h3 class="mb-3">Login</h3>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+
+    <button type="submit" class="btn btn-primary w-100 mb-2">
+        Login
+    </button>
+</form>
+
+<!-- Dashboard link -->
+
+
+</div>
+
+{% endblock %}

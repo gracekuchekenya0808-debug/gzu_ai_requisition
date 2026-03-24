@@ -1,0 +1,99 @@
+{% extends 'requisitions/base.html' %}
+{% block content %}
+
+<div class="container mt-4">
+
+  <div class="card shadow-sm p-4">
+    <h2 class="mb-3">Requisition #{{ req.id }}</h2>
+
+    <p><strong>Status:</strong> {{ req.status }}</p>
+    <p><strong>Created:</strong> {{ req.created }}</p>
+    <p><strong>Notes:</strong> {{ req.notes }}</p>
+
+    <hr>
+
+    <h4>Items</h4>
+    <ul class="list-group mb-4">
+      {% for it in req.items.all %}
+        <li class="list-group-item">
+          {{ it.quantity }} x {{ it.item.name }}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <!-- 🔘 ACTION BUTTONS -->
+    <div class="d-flex flex-wrap gap-2 mb-3">
+
+      <!-- ✅ PRINT BUTTON (Admin + HOD) -->
+      {% if user.is_staff or user.profile.role == 'head' %}
+        <a href="{% url 'hod_print_requisitions' %}" 
+           class="btn btn-secondary">
+           🖨 Print All
+        </a>
+      {% endif %}
+
+      <!-- ✅ VIEW STOCK (HOD ONLY) -->
+      {% if user.profile.role == 'head' %}
+        <a href="{% url 'hod_view_stock' %}" 
+           class="btn btn-info">
+           📦 View Stock
+        </a>
+      {% endif %}
+
+      <!-- ✅ DELETE BUTTON (Admin + HOD) -->
+      {% if user.is_staff or user.profile.role == 'head' %}
+        {% if req.status != 'approved' %}
+          <a href="{% url 'delete_requisition' req.id %}"
+             class="btn btn-danger">
+             Delete
+          </a>
+        {% endif %}
+      {% endif %}
+
+    </div>
+
+    <!-- 🔧 ADMIN ACTIONS -->
+    {% if user.is_staff %}
+
+      {% if req.status == 'submitted' %}
+
+        <form method="post" action="{% url 'requisition_approve' req.id %}" class="mb-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="approve">
+
+          <div class="mb-2">
+            <textarea name="comment" class="form-control" placeholder="Comment (optional)"></textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-success" type="submit">✔ Approve</button>
+          </div>
+        </form>
+
+        <form method="post" action="{% url 'requisition_approve' req.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="reject">
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-danger" type="submit">✖ Reject</button>
+          </div>
+        </form>
+
+      {% endif %}
+
+      {% if req.status == 'approved' %}
+        <form method="post" action="{% url 'requisition_fulfill' req.id %}" class="mt-3">
+          {% csrf_token %}
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary">Mark Fulfilled</button>
+          </div>
+        </form>
+      {% endif %}
+
+    {% endif %}
+
+  </div>
+
+</div>
+
+{% endblock %}
