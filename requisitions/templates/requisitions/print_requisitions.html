@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Print Requisition</title>
+</head>
+
+<body onload="window.print()">
+
+    <h2>Requisition #{{ req.id }}</h2>
+
+    <p>Status: {{ req.status }}</p>
+    <p>Date: {{ req.created }}</p>
+
+    <h4>Items</h4>
+    <ul>
+        {% for item in req.items.all %}
+            <li>{{ item.quantity }} x {{ item.item.name }}</li>
+        {% endfor %}
+    </ul>
+
+</body>
+</html>

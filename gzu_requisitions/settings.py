@@ -106,4 +106,32 @@ LOGIN_URL = '/accounts/login/'
 # Default primary key
 # -----------------------------
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# -----------------------------
+# Email Configuration (Password Reset)
+# -----------------------------
+# Option 1: Console Backend (prints to terminal) - EASIEST FOR TESTING
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Option 2: File Backend (saves emails to folder) - BETTER FOR VIEWING
+# EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
+# EMAIL_FILE_PATH = BASE_DIR / 'sent_emails'  # Emails saved here
+
+# Option 3: Production with Gmail
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'your-email@gmail.com'
+# EMAIL_HOST_PASSWORD = 'your-app-password'  # Use App Password, not Gmail password
+
+# Option 4: Custom SMTP server
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'your-smtp-server.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'your-email'
+# EMAIL_HOST_PASSWORD = 'your-password'
+
+DEFAULT_FROM_EMAIL = 'noreply@gzu-requisitions.com'
+SERVER_EMAIL = 'noreply@gzu-requisitions.com'

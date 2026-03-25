@@ -1,0 +1,32 @@
+{% extends 'requisitions/base.html' %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+    <h2>Welcome {{ user.username }}</h2>
+    <p>Select an option below:</p>
+
+    <div class="d-flex gap-3 mt-4">
+
+        <a href="{% url 'requisition_create' %}" class="btn btn-primary">
+            ➕ Create Requisition
+        </a>
+
+        <!-- Button for viewing requisitions -->
+        <a href="{% url 'user_requisition_list' %}" class="btn btn-secondary">
+            📄 View My Requisitions
+        </a>
+
+        <!-- 👨‍💼 Manage Users (HOD only) -->
+        {% if user.profile.role == 'head' %}
+            <a href="{% url 'manage_department_users' %}" class="btn btn-warning">
+                👥 Manage Users
+            </a>
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -18,4 +18,12 @@ urlpatterns = [
     path('stock/', views.hod_view_stock, name='hod_view_stock'),
     path('forecast/', views.arima_forecast, name='arima_forecast'),
     path('requisitions/', views.requisition_list, name='requisition_list'),
+    path('home/', views.user_home, name='user_home'),
+    path('my-requisitions/', views.user_requisition_list, name='user_requisition_list'),
+    path('requisition/<int:pk>/print/', views.print_requisition, name='print_requisition'),
+    
+    # 👨‍💼 Department User Management (HOD only)
+    path('manage-users/', views.manage_department_users, name='manage_department_users'),
+    path('add-user/', views.add_department_user, name='add_department_user'),
+    path('delete-user/<int:user_id>/', views.delete_department_user, name='delete_department_user'),
 ]

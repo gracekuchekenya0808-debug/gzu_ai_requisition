@@ -1,0 +1,43 @@
+{% extends 'requisitions/base.html' %}
+
+{% block content %}
+
+<h2 class="mb-3">My Requisitions</h2>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Created</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for req in requisitions %}
+        <tr>
+            <td>{{ req.id }}</td>
+            <td>{{ req.created }}</td>
+            <td>
+                {% if req.status == 'submitted' %}
+                    <span class="badge bg-warning">Pending</span>
+                {% elif req.status == 'approved' %}
+                    <span class="badge bg-success">Approved</span>
+                {% elif req.status == 'rejected' %}
+                    <span class="badge bg-danger">Rejected</span>
+                {% endif %}
+            </td>
+            <td>
+                <a href="{% url 'requisition_detail' req.id %}" class="btn btn-sm btn-outline-primary">View</a>
+                <a href="{% url 'print_requisition' req.id %}" class="btn btn-sm btn-outline-secondary">Print</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">No requisitions found.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

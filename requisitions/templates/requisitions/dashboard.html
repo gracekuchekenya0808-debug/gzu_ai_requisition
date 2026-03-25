@@ -72,6 +72,13 @@
     🖨 Print Requisitions
   </a>
 
+  <!-- 👨‍💼 Manage Users (HOD only) -->
+  {% if user.profile.role == 'head' %}
+    <a href="{% url 'manage_department_users' %}" class="btn btn-warning">
+      👥 Manage Users
+    </a>
+  {% endif %}
+
 </div>
 {% endif %}
 

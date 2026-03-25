@@ -1,0 +1,88 @@
+{% extends 'requisitions/base.html' %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+  <div class="card shadow-sm p-4">
+    <h2 class="mb-3">👥 Manage Department Users</h2>
+    
+    <p class="text-muted">
+      Department: <strong>{{ department.name }}</strong>
+    </p>
+
+    <!-- Add User Button -->
+    <div class="mb-3">
+      <a href="{% url 'add_department_user' %}" class="btn btn-success">
+        ➕ Add New User
+      </a>
+    </div>
+
+    <!-- Users List -->
+    {% if users %}
+      <table class="table table-striped table-bordered">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            <tr>
+              <td>{{ user.username }}</td>
+              <td>{{ user.first_name }} {{ user.last_name }}</td>
+              <td>{{ user.email }}</td>
+              <td>
+                {% if user.profile.role == 'user' %}
+                  <span class="badge bg-info">User</span>
+                {% elif user.profile.role == 'head' %}
+                  <span class="badge bg-warning">Head</span>
+                {% elif user.profile.role == 'admin' %}
+                  <span class="badge bg-danger">Admin</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if user.is_active %}
+                  <span class="badge bg-success">Active</span>
+                {% else %}
+                  <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if user != request.user %}
+                  <a href="{% url 'delete_department_user' user.id %}" 
+                     class="btn btn-sm btn-danger"
+                     onclick="return confirm('Are you sure you want to deactivate this user?');">
+                    🗑 Deactivate
+                  </a>
+                {% else %}
+                  <span class="text-muted">Your Account</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="alert alert-info">
+        No users found in your department.
+      </div>
+    {% endif %}
+
+    <!-- Back Button -->
+    <div class="mt-3">
+      <a href="{% url 'dashboard' %}" class="btn btn-secondary">
+        ← Back to Dashboard
+      </a>
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}

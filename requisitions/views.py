@@ -41,6 +41,12 @@ def is_admin_or_head(user):
 
 @login_required
 def requisition_create(request):
+    # ✅ ENSURE USER HAS A PROFILE AND DEPARTMENT
+    profile = getattr(request.user, 'profile', None)
+    if not profile or not profile.department:
+        messages.error(request, "Your profile is not properly configured. Please contact an administrator to assign a department to your account.")
+        return redirect('user_home')
+
     if request.method == 'POST':
         form = RequisitionForm(request.POST)
         formset = RequisitionItemFormSet(request.POST)
@@ -101,6 +107,21 @@ def requisition_create(request):
 @login_required
 def requisition_detail(request, pk):
     req = get_object_or_404(Requisition, pk=pk)
+    user = request.user
+    profile = getattr(user, 'profile', None)
+
+    # ✅ Permission check (check profile role FIRST):
+    # - HOD can view only their department's
+    # - Regular user can view only their own
+    # - Admin can view any
+    if not (
+        (profile and profile.role == 'head' and profile.department == req.department) or
+        user == req.requester or
+        user.is_staff
+    ):
+        messages.error(request, "You do not have permission to view this requisition.")
+        return redirect('requisition_list')
+
     return render(request,'requisitions/requisition_detail.html', {'req': req})
 # Removed duplicate dashboard function above
 
@@ -111,11 +132,11 @@ def requisition_approve(request, pk):
 
     req = get_object_or_404(Requisition, pk=pk)
 
-    # ✅ Permission: Only Admin OR Head of SAME department
+    # ✅ Permission: Only HOD of SAME department OR Admin (check HOD first)
+    profile = getattr(request.user, 'profile', None)
     if not (
-        request.user.is_staff or
-        (request.user.profile.role == 'head' and
-         request.user.profile.department == req.department)
+        (profile and profile.role == 'head' and profile.department == req.department) or
+        request.user.is_staff
     ):
         messages.error(request, "You are not allowed to approve this requisition.")
         return redirect('requisition_list')
@@ -201,8 +222,20 @@ GZU AI Requisition System
 # Mark fulfilled
 @login_required
 @require_POST
+@login_required
+@require_POST
 def requisition_fulfill(request, pk):
     req = get_object_or_404(Requisition, pk=pk)
+
+    # ✅ Permission: Only HOD of SAME department OR Admin (check HOD first)
+    profile = getattr(request.user, 'profile', None)
+    if not (
+        (profile and profile.role == 'head' and profile.department == req.department) or
+        request.user.is_staff
+    ):
+        messages.error(request, "You are not allowed to fulfill this requisition.")
+        return redirect('requisition_list')
+
     req.status = 'fulfilled'
     req.save()
     from .models import Fulfillment, Notification
@@ -210,16 +243,21 @@ def requisition_fulfill(request, pk):
         requisition=req,
         defaults={'fulfilled_by': request.user}
     )
+    messages.success(request, "Requisition marked as fulfilled.")
     return redirect('requisition_detail', pk=pk)
 @login_required
 
 
+@login_required
 def delete_requisition(request, pk):
     req = get_object_or_404(Requisition, pk=pk)
 
-    # Only admin or head can delete
-    profile, _ = Profile.objects.get_or_create(user=request.user)
-    if not (request.user.is_staff or profile.role == 'head'):
+    # ✅ Permission: Only HOD of SAME department OR Admin (check HOD first)
+    profile = getattr(request.user, 'profile', None)
+    if not (
+        (profile and profile.role == 'head' and profile.department == req.department) or
+        request.user.is_staff
+    ):
         messages.error(request, "You do not have permission to delete this requisition.")
         return redirect('requisition_list')
 
@@ -241,7 +279,7 @@ def delete_requisition(request, pk):
 
     messages.success(request, f"Requisition #{req.id} has been deleted.")
     return redirect('requisition_list')
-@login_required
+
 @login_required
 def requisition_list(request):
     user = request.user
@@ -250,21 +288,22 @@ def requisition_list(request):
     # 🔍 Get filter from URL (e.g. ?status=submitted)
     status_filter = request.GET.get('status')
 
-    # 👑 Admin → sees ALL requisitions
-    if user.is_staff:
-        qs = Requisition.objects.all().order_by('-created')
-
-    # 👨‍💼 HOD → only their department
-    elif profile and profile.role == 'head' and profile.department:
+    # Check profile role FIRST (before is_staff)
+    # 👨‍💼 HOD → only their department (excluding deleted)
+    if profile and profile.role == 'head' and profile.department:
         qs = Requisition.objects.filter(
             department=profile.department
-        ).order_by('-created')
+        ).exclude(status='deleted').order_by('-created')
 
-    # 👤 Normal user → only their own
+    # 👑 Admin → sees ALL requisitions (except deleted)
+    elif user.is_staff:
+        qs = Requisition.objects.exclude(status='deleted').order_by('-created')
+
+    # 👤 Normal user → only their own (excluding deleted)
     elif profile:
         qs = Requisition.objects.filter(
             requester=user
-        ).order_by('-created')
+        ).exclude(status='deleted').order_by('-created')
 
     # ⚠️ Fallback (no profile)
     else:
@@ -320,37 +359,34 @@ def low_stock_items(request):
 
 
 @login_required
+@login_required
 def dashboard(request):
 
-    # Safely get profile (avoids crash if missing)
     profile = getattr(request.user, 'profile', None)
 
-    # ✅ Admin or HOD → see dashboard
-    if request.user.is_staff or (profile and profile.role == 'head'):
-
-        total = Requisition.objects.count()
-        pending = Requisition.objects.filter(status='submitted').count()
-        approved = Requisition.objects.filter(status='approved').count()
-        rejected = Requisition.objects.filter(status='rejected').count()
-
+    # Check profile role FIRST (before is_staff)
+    # HOD
+    if profile and profile.role == 'head':
         return render(request, 'requisitions/dashboard.html', {
-            'total': total,
-            'pending': pending,
-            'approved': approved,
-            'rejected': rejected
+            'total': Requisition.objects.filter(department=profile.department).count(),
+            'pending': Requisition.objects.filter(status='submitted', department=profile.department).count(),
+            'approved': Requisition.objects.filter(status='approved', department=profile.department).count(),
+            'rejected': Requisition.objects.filter(status='rejected', department=profile.department).count()
         })
 
-    # ✅ Normal users → redirect instead of 403
-    return redirect('requisition_list')
-@login_required
-def hod_view_stock(request):
-    if not (request.user.profile.role == 'head'):
-        raise PermissionDenied
+    # Admin
+    if request.user.is_staff:
+        return render(request, 'requisitions/dashboard.html', {
+            'total': Requisition.objects.count(),
+            'pending': Requisition.objects.filter(status='submitted').count(),
+            'approved': Requisition.objects.filter(status='approved').count(),
+            'rejected': Requisition.objects.filter(status='rejected').count()
+        })
 
-    items = Item.objects.all().order_by('name')
+    # NORMAL USER
+    return redirect('user_home')
 
-    return render(request, "requisitions/hod_stock.html", {"items": items})    
-    
+@login_required    
 def arima_forecast(request):
 
     # Get requisition items with requisition date
@@ -410,16 +446,19 @@ def user_list(request):
 
 @login_required
 def hod_print_requisitions(request):
+    # Check profile role FIRST (before is_staff)
+    profile = getattr(request.user, 'profile', None)
+    
     # Only HODs or Admins can access
-    if not (request.user.is_staff or request.user.profile.role == 'head'):
+    if not (profile and profile.role == 'head' or request.user.is_staff):
         from django.core.exceptions import PermissionDenied
         raise PermissionDenied
 
-    # If admin, show all requisitions, otherwise only HOD's department
-    if request.user.is_staff:
-        requisitions = Requisition.objects.all()
+    # If HOD, show only their department; if admin, show all
+    if profile and profile.role == 'head':
+        requisitions = Requisition.objects.filter(department=profile.department)
     else:
-        requisitions = Requisition.objects.filter(department=request.user.profile.department)
+        requisitions = Requisition.objects.all()
 
     # Create CSV response
     import csv
@@ -462,6 +501,135 @@ def login_view(request):
         elif user.profile.role == 'head':
             return redirect('dashboard')
         else:
-            return redirect('requisition_list')
+            return redirect('user_home')
 
     return render(request, 'registration/login.html', {'form': form})
+
+@login_required
+def user_home(request):
+    return render(request, 'requisitions/user_home.html')
+
+
+@login_required
+def user_requisition_list(request):
+    user = request.user
+    qs = Requisition.objects.filter(requester=user).order_by('-created')
+    return render(request, 'requisitions/user_requisition_list.html', {'requisitions': qs})
+
+@login_required
+@login_required
+def print_requisition(request, pk):
+    req = get_object_or_404(Requisition, pk=pk)
+    user = request.user
+    profile = getattr(user, 'profile', None)
+
+    # ✅ Allow owner, HOD from same department, or admin (check HOD first)
+    if not (
+        (profile and profile.role == 'head' and profile.department == req.department) or
+        user == req.requester or
+        user.is_staff
+    ):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
+
+    return render(request, 'requisitions/print_requisitions.html', {'req': req})
+
+
+# ==============================
+# DEPARTMENT USER MANAGEMENT (HOD ONLY)
+# ==============================
+
+@login_required
+def manage_department_users(request):
+    """View for HODs to manage users in their department"""
+    profile = getattr(request.user, 'profile', None)
+    
+    # Only HODs can access this page
+    if not (profile and profile.role == 'head' and profile.department):
+        messages.error(request, "You do not have permission to manage users.")
+        return redirect('dashboard')
+    
+    department = profile.department
+    users_in_dept = User.objects.filter(profile__department=department).select_related('profile')
+    
+    return render(request, 'requisitions/manage_users.html', {
+        'department': department,
+        'users': users_in_dept
+    })
+
+
+@login_required
+def add_department_user(request):
+    """View for HODs to add users to their department"""
+    profile = getattr(request.user, 'profile', None)
+    
+    # Only HODs can access this page
+    if not (profile and profile.role == 'head' and profile.department):
+        messages.error(request, "You do not have permission to add users.")
+        return redirect('dashboard')
+    
+    department = profile.department
+    
+    if request.method == 'POST':
+        from .forms import UserCreationForm, UserProfileForm
+        user_form = UserCreationForm(request.POST)
+        
+        if user_form.is_valid():
+            # Create the user
+            user = user_form.save(commit=True)
+            
+            # Create profile for user
+            from .models import Profile
+            Profile.objects.get_or_create(
+                user=user,
+                defaults={
+                    'department': department,
+                    'role': 'user'  # Default role for new users
+                }
+            )
+            
+            messages.success(request, f"User {user.username} has been added to {department.name} department!")
+            return redirect('manage_department_users')
+        else:
+            for field, errors in user_form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{field}: {error}")
+    else:
+        from .forms import UserCreationForm
+        user_form = UserCreationForm()
+    
+    return render(request, 'requisitions/add_user.html', {
+        'department': department,
+        'form': user_form
+    })
+
+
+@login_required
+def delete_department_user(request, user_id):
+    """View for HODs to delete users from their department"""
+    profile = getattr(request.user, 'profile', None)
+    user_to_delete = get_object_or_404(User, id=user_id)
+    user_profile = getattr(user_to_delete, 'profile', None)
+    
+    # Only HODs can delete users
+    if not (profile and profile.role == 'head' and profile.department):
+        messages.error(request, "You do not have permission to delete users.")
+        return redirect('dashboard')
+    
+    # Can only delete users from their own department
+    if not user_profile or user_profile.department != profile.department:
+        messages.error(request, "You can only delete users from your own department.")
+        return redirect('manage_department_users')
+    
+    # Cannot delete yourself
+    if user_to_delete == request.user:
+        messages.error(request, "You cannot delete your own account.")
+        return redirect('manage_department_users')
+    
+    # Soft delete: deactivate the user
+    username = user_to_delete.username
+    user_to_delete.is_active = False
+    user_to_delete.save()
+    
+    messages.success(request, f"User {username} has been deactivated.")
+    return redirect('manage_department_users')

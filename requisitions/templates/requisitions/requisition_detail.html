@@ -24,11 +24,11 @@
     <!-- 🔘 ACTION BUTTONS -->
     <div class="d-flex flex-wrap gap-2 mb-3">
 
-      <!-- ✅ PRINT BUTTON (Admin + HOD) -->
-      {% if user.is_staff or user.profile.role == 'head' %}
-        <a href="{% url 'hod_print_requisitions' %}" 
+      <!-- ✅ PRINT BUTTON (Admin + HOD + Requester) -->
+      {% if user.is_staff or user.profile.role == 'head' or user == req.requester %}
+        <a href="{% url 'print_requisition' req.id %}" 
            class="btn btn-secondary">
-           🖨 Print All
+           🖨 Print
         </a>
       {% endif %}
 
