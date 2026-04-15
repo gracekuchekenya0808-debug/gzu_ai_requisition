@@ -15,43 +15,51 @@
 
 <!-- ===== Statistics Cards ===== -->
 
-<div class="row text-center mb-4">
+<div class="row row-cols-1 row-cols-md-4 g-4 text-center mb-4">
 
-  <div class="col-md-3">
-   <a href="{% url 'requisition_list' %}" style="text-decoration: none;">
-     <div class="card shadow p-3 text-center">
-       <h5>Total Requisitions</h5>
-       <h3>{{ total }}</h3>
-     </div>
+  <div class="col">
+    <a href="{% url 'requisition_list' %}" class="text-decoration-none text-dark">
+      <div class="card shadow h-100">
+        <div class="card-body">
+          <h5 class="card-title">Total Requisitions</h5>
+          <h3 class="card-text">{{ total }}</h3>
+        </div>
+      </div>
     </a>
   </div>
 
-  <div class="col-md-3">
-    <a href="{% url 'requisition_list' %}?status=submitted" style="text-decoration: none;">
-      <div class="card bg-warning shadow p-3">
-       <h5>Pending Requests</h5>
-       <h3>{{ pending }}</h3>
+  <div class="col">
+    <a href="{% url 'requisition_list' %}?status=submitted" class="text-decoration-none text-dark">
+      <div class="card bg-warning text-dark shadow h-100">
+        <div class="card-body">
+          <h5 class="card-title">Pending Requests</h5>
+          <h3 class="card-text">{{ pending }}</h3>
+        </div>
       </div>
-    <a/>
+    </a>
   </div>
 
-  <div class="col-md-3">
-   <a href="{% url 'requisition_list' %}?status=approved" style="text-decoration: none;">
-     <div class="card bg-success text-white shadow p-3 text-center">
-       <h5>Approved Requests</h5>
-       <h3>{{ approved }}</h3>
-     </div>
-   </a>
- </div>
+  <div class="col">
+    <a href="{% url 'requisition_list' %}?status=approved" class="text-decoration-none text-white">
+      <div class="card bg-success shadow h-100">
+        <div class="card-body">
+          <h5 class="card-title">Approved Requests</h5>
+          <h3 class="card-text">{{ approved }}</h3>
+        </div>
+      </div>
+    </a>
+  </div>
 
-  <div class="col-md-3">
-   <a href="{% url 'requisition_list' %}?status=rejected" style="text-decoration: none;">
-     <div class="card bg-danger text-white shadow p-3 text-center">
-       <h5>Rejected Requests</h5>
-       <h3>{{ rejected }}</h3>
-     </div>
-   </a>
- </div> 
+  <div class="col">
+    <a href="{% url 'requisition_list' %}?status=rejected" class="text-decoration-none text-white">
+      <div class="card bg-danger shadow h-100">
+        <div class="card-body">
+          <h5 class="card-title">Rejected Requests</h5>
+          <h3 class="card-text">{{ rejected }}</h3>
+        </div>
+      </div>
+    </a>
+  </div>
 
 </div>
 
@@ -61,21 +69,21 @@
 <div class="d-flex flex-wrap gap-3 mb-4">
 
   <a href="{% url 'requisition_list' %}" class="btn btn-primary">
-    📄 View All Requisitions
+    View All Requisitions
   </a>
 
   <a href="{% url 'hod_view_stock' %}" class="btn btn-info">
-    📦 View Stock
+    View Stock
   </a>
 
   <a href="{% url 'hod_print_requisitions' %}" class="btn btn-secondary">
-    🖨 Print Requisitions
+    Print Requisitions
   </a>
 
-  <!-- 👨‍💼 Manage Users (HOD only) -->
+  <!-- Manage Users (HOD only) -->
   {% if user.profile.role == 'head' %}
     <a href="{% url 'manage_department_users' %}" class="btn btn-warning">
-      👥 Manage Users
+      Manage Users
     </a>
   {% endif %}
 

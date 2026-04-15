@@ -1,0 +1,44 @@
+{% extends 'requisitions/base.html' %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+  <!-- FORM -->
+  <div class="card p-4 shadow mb-4">
+    <h3>Add New Stock</h3>
+
+    <form method="post">
+      {% csrf_token %}
+      
+      <div class="mb-3">
+        <label class="form-label">Item Name</label>
+        {{ form.name }}
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">SKU</label>
+        {{ form.sku }}
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Stock Quantity</label>
+        {{ form.stock }}
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Reorder Level</label>
+        {{ form.reorder_level }}
+      </div>
+
+      <button type="submit" class="btn btn-success">
+        Add Stock
+      </button>
+    </form>
+  </div>
+
+</div>
+
+{% endblock %}
+
+ 

@@ -85,7 +85,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # -----------------------------
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'Africa/Harare'  # 🇿🇼 your local timezone
+TIME_ZONE = 'Africa/Harare'  # your local timezone
 
 USE_I18N = True
 USE_TZ = True
@@ -96,7 +96,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # -----------------------------
-# Auth Redirects (✅ FIXES YOUR ERROR)
+# Auth Redirects (FIXES YOUR ERROR)
 # -----------------------------
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'

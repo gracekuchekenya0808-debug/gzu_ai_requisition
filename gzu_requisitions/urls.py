@@ -20,12 +20,12 @@ from django.urls import path, include
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # 🔐 Login / Logout
+    # Login / Logout
     path('accounts/', include('django.contrib.auth.urls')),
 
-    # 📦 Your app
+    # Your app
     path('requisitions/', include('requisitions.urls')),
 
-    # 🏠 Home → go to requisitions
+    # Home → go to requisitions
     path('', include('requisitions.urls')),
 ]

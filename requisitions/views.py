@@ -33,6 +33,10 @@ from .forms import RequisitionForm, RequisitionItemFormSet
 from .models import Requisition, RequisitionItem, Item, Profile, Notification
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.core.exceptions import PermissionDenied
+from .forms import StockForm
 
 def is_admin_or_head(user):
     return user.is_staff or user.profile.role == 'head'
@@ -41,7 +45,7 @@ def is_admin_or_head(user):
 
 @login_required
 def requisition_create(request):
-    # ✅ ENSURE USER HAS A PROFILE AND DEPARTMENT
+    # ENSURE USER HAS A PROFILE AND DEPARTMENT
     profile = getattr(request.user, 'profile', None)
     if not profile or not profile.department:
         messages.error(request, "Your profile is not properly configured. Please contact an administrator to assign a department to your account.")
@@ -110,7 +114,7 @@ def requisition_detail(request, pk):
     user = request.user
     profile = getattr(user, 'profile', None)
 
-    # ✅ Permission check (check profile role FIRST):
+    # Permission check (check profile role FIRST):
     # - HOD can view only their department's
     # - Regular user can view only their own
     # - Admin can view any
@@ -132,7 +136,7 @@ def requisition_approve(request, pk):
 
     req = get_object_or_404(Requisition, pk=pk)
 
-    # ✅ Permission: Only HOD of SAME department OR Admin (check HOD first)
+    # Permission: Only HOD of SAME department OR Admin (check HOD first)
     profile = getattr(request.user, 'profile', None)
     if not (
         (profile and profile.role == 'head' and profile.department == req.department) or
@@ -141,7 +145,7 @@ def requisition_approve(request, pk):
         messages.error(request, "You are not allowed to approve this requisition.")
         return redirect('requisition_list')
 
-    # ✅ Prevent re-approval
+    # Prevent re-approval
     if req.status in ['approved', 'rejected']:
         messages.warning(request, "This requisition has already been processed.")
         return redirect('requisition_detail', pk=pk)
@@ -150,16 +154,16 @@ def requisition_approve(request, pk):
     comment = request.POST.get('comment', '')
 
     # ----------------------
-    # ✅ APPROVE
+    # APPROVE
     # ----------------------
     if action == 'approve':
         low_stock_items = []  # track items that go low
 
-    # ✅ Loop through all items in requisition
+    # Loop through all items in requisition
     for req_item in req.items.all():
         item = req_item.item
 
-        # 🚨 Prevent approving if stock is not enough
+        # Prevent approving if stock is not enough
         if req_item.quantity > item.stock:
             messages.error(
                 request,
@@ -167,15 +171,15 @@ def requisition_approve(request, pk):
             )
             return redirect('requisition_detail', pk=req.id)
 
-        # ✅ Deduct stock
+        # Deduct stock
         item.stock -= req_item.quantity
         item.save()
 
-        # ⚠️ Check if stock is low
+        # Check if stock is low
         if item.stock <= item.reorder_level:
             low_stock_items.append(item)
 
-    # ✅ NOW approve (after stock update)
+    # NOW approve (after stock update)
     req.status = 'approved'
     req.save()
 
@@ -190,7 +194,7 @@ def requisition_approve(request, pk):
 
     messages.success(request, "Requisition approved and stock updated successfully.")
 
-    # 🔔 Notify HOD(s) if stock is low
+    # Notify HOD(s) if stock is low
     for item in low_stock_items:
         hods = Profile.objects.filter(
             role='head',
@@ -200,7 +204,7 @@ def requisition_approve(request, pk):
         for hod in hods:
             Notification.objects.create(
                 user=hod.user,
-                message=f"⚠️ Low stock alert: {item.name} has only {item.stock} left."
+                message=f"Low stock alert: {item.name} has only {item.stock} left."
             )
 
     subject = f"Requisition #{req.id} Approved"
@@ -227,7 +231,7 @@ GZU AI Requisition System
 def requisition_fulfill(request, pk):
     req = get_object_or_404(Requisition, pk=pk)
 
-    # ✅ Permission: Only HOD of SAME department OR Admin (check HOD first)
+    # Permission: Only HOD of SAME department OR Admin (check HOD first)
     profile = getattr(request.user, 'profile', None)
     if not (
         (profile and profile.role == 'head' and profile.department == req.department) or
@@ -252,7 +256,7 @@ def requisition_fulfill(request, pk):
 def delete_requisition(request, pk):
     req = get_object_or_404(Requisition, pk=pk)
 
-    # ✅ Permission: Only HOD of SAME department OR Admin (check HOD first)
+    # Permission: Only HOD of SAME department OR Admin (check HOD first)
     profile = getattr(request.user, 'profile', None)
     if not (
         (profile and profile.role == 'head' and profile.department == req.department) or
@@ -261,17 +265,17 @@ def delete_requisition(request, pk):
         messages.error(request, "You do not have permission to delete this requisition.")
         return redirect('requisition_list')
 
-    # ❌ Cannot delete after approval
+    # Cannot delete after approval
     if req.status == 'approved':
         messages.error(request, "Approved requisitions cannot be deleted.")
         return redirect('requisition_detail', pk=pk)
 
-    # ✅ Soft delete instead of hard delete
+    # Soft delete instead of hard delete
     req.status = 'deleted'
     req.deleted_by = request.user
     req.save()
 
-    # ✅ Create a notification for the requester
+    # Create a notification for the requester
     Notification.objects.create(
         user=req.requester,
         message=f"Your requisition #{req.id} from {req.created.date()} was deleted by admin."
@@ -285,31 +289,31 @@ def requisition_list(request):
     user = request.user
     profile = getattr(user, 'profile', None)
 
-    # 🔍 Get filter from URL (e.g. ?status=submitted)
+    # Get filter from URL (e.g. ?status=submitted)
     status_filter = request.GET.get('status')
 
     # Check profile role FIRST (before is_staff)
-    # 👨‍💼 HOD → only their department (excluding deleted)
+    # HOD → only their department (excluding deleted)
     if profile and profile.role == 'head' and profile.department:
         qs = Requisition.objects.filter(
             department=profile.department
         ).exclude(status='deleted').order_by('-created')
 
-    # 👑 Admin → sees ALL requisitions (except deleted)
+    # Admin → sees ALL requisitions (except deleted)
     elif user.is_staff:
         qs = Requisition.objects.exclude(status='deleted').order_by('-created')
 
-    # 👤 Normal user → only their own (excluding deleted)
+    # Normal user → only their own (excluding deleted)
     elif profile:
         qs = Requisition.objects.filter(
             requester=user
         ).exclude(status='deleted').order_by('-created')
 
-    # ⚠️ Fallback (no profile)
+    # Fallback (no profile)
     else:
         qs = Requisition.objects.none()
 
-    # ✅ Apply status filter AFTER role filtering
+    # Apply status filter AFTER role filtering
     if status_filter:
         qs = qs.filter(status=status_filter)
 
@@ -437,7 +441,7 @@ def arima_forecast(request):
 
 @staff_member_required
 def user_list(request):
-    users = User.objects.all()
+    users = User.objects.select_related('profile').all()
     return render(request, "requisitions/user_list.html", {"users": users})
 
 # views.py
@@ -495,7 +499,7 @@ def login_view(request):
         user = form.get_user()
         login(request, user)
 
-        # 🔥 Role-based redirect
+        # Role-based redirect
         if user.is_staff:
             return redirect('dashboard')
         elif user.profile.role == 'head':
@@ -523,7 +527,7 @@ def print_requisition(request, pk):
     user = request.user
     profile = getattr(user, 'profile', None)
 
-    # ✅ Allow owner, HOD from same department, or admin (check HOD first)
+    # Allow owner, HOD from same department, or admin (check HOD first)
     if not (
         (profile and profile.role == 'head' and profile.department == req.department) or
         user == req.requester or
@@ -633,3 +637,131 @@ def delete_department_user(request, user_id):
     
     messages.success(request, f"User {username} has been deactivated.")
     return redirect('manage_department_users')
+
+
+@login_required
+def activate_department_user(request, user_id):
+    """Activate a user in the HOD department user list"""
+    profile = getattr(request.user, 'profile', None)
+    user_to_activate = get_object_or_404(User, id=user_id)
+    user_profile = getattr(user_to_activate, 'profile', None)
+
+    if not (profile and profile.role == 'head' and profile.department):
+        messages.error(request, "You do not have permission to activate users.")
+        return redirect('dashboard')
+
+    if not user_profile or user_profile.department != profile.department:
+        messages.error(request, "You can only activate users from your own department.")
+        return redirect('manage_department_users')
+
+    if user_to_activate == request.user:
+        messages.error(request, "You cannot change your own account status here.")
+        return redirect('manage_department_users')
+
+    user_to_activate.is_active = True
+    user_to_activate.save()
+    messages.success(request, f"User {user_to_activate.username} has been activated.")
+    return redirect('manage_department_users')
+
+
+@staff_member_required
+def activate_user(request, user_id):
+    """View for admin to activate users"""
+    user_to_activate = get_object_or_404(User, id=user_id)
+    
+    # Cannot activate yourself if you're already active (but allow if inactive)
+    if user_to_activate == request.user and user_to_activate.is_active:
+        messages.error(request, "You cannot modify your own active status.")
+        return redirect('user_list')
+    
+    # Activate the user
+    username = user_to_activate.username
+    user_to_activate.is_active = True
+    user_to_activate.save()
+    
+    messages.success(request, f"User {username} has been activated.")
+    return redirect('user_list')
+
+
+@staff_member_required
+def deactivate_user(request, user_id):
+    """View for admin to deactivate users"""
+    user_to_deactivate = get_object_or_404(User, id=user_id)
+    
+    # Cannot deactivate yourself
+    if user_to_deactivate == request.user:
+        messages.error(request, "You cannot deactivate your own account.")
+        return redirect('user_list')
+    
+    # Deactivate the user
+    username = user_to_deactivate.username
+    user_to_deactivate.is_active = False
+    user_to_deactivate.save()
+    
+    messages.success(request, f"User {username} has been deactivated.")
+    return redirect('user_list')
+
+
+def normalize_item_name(name):
+    import re
+    return re.sub(r'[^a-z0-9]', '', name.lower())
+
+
+def find_or_merge_existing_item(name):
+    normalized = normalize_item_name(name)
+    matches = [item for item in Item.objects.all() if normalize_item_name(item.name) == normalized]
+    if not matches:
+        return None
+
+    primary = matches[0]
+    for duplicate in matches[1:]:
+        primary.stock += duplicate.stock
+        if not primary.sku and duplicate.sku:
+            primary.sku = duplicate.sku
+        primary.reorder_level = max(primary.reorder_level, duplicate.reorder_level)
+        duplicate.delete()
+
+    primary.save()
+    return primary
+
+
+@login_required
+def add_stock(request):
+
+    profile = getattr(request.user, 'profile', None)
+
+    # Restrict to HOD only
+    if not (profile and profile.role == 'head'):
+        raise PermissionDenied
+
+    if request.method == 'POST':
+        form = StockForm(request.POST)
+        if form.is_valid():
+            name = form.cleaned_data['name'].strip()
+            stock_amount = form.cleaned_data['stock']
+            sku = form.cleaned_data['sku']
+            reorder_level = form.cleaned_data['reorder_level']
+
+            existing_item = find_or_merge_existing_item(name)
+
+            if existing_item:
+                existing_item.stock += stock_amount
+                if sku:
+                    existing_item.sku = sku
+                existing_item.reorder_level = reorder_level
+                existing_item.save()
+                messages.success(request, f"Stock for '{existing_item.name}' has been updated by {stock_amount} units.")
+            else:
+                Item.objects.create(
+                    name=name,
+                    stock=stock_amount,
+                    sku=sku,
+                    reorder_level=reorder_level
+                )
+                messages.success(request, f"New stock item '{name}' has been added.")
+
+            return redirect('hod_view_stock')
+    else:
+        form = StockForm()
+    
+    return render(request, 'requisitions/add_stock.html', {'form': form })

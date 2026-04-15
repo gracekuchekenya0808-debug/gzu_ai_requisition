@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 class RequisitionForm(forms.ModelForm):
     class Meta:
         model = Requisition
-        # ✅ REMOVE user & department (they are auto-filled in views)
+        # REMOVE user & department (they are auto-filled in views)
         fields = ['request_date', 'notes']
 
         widgets = {
@@ -23,10 +23,10 @@ class RequisitionItemForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # ✅ Only show items that are in stock
+        # Only show items that are in stock
         self.fields['item'].queryset = Item.objects.filter(stock__gt=0)
 
-        # ✅ Make dropdown nicer
+        # Make dropdown nicer
         self.fields['item'].label = "Select Item"
         self.fields['quantity'].label = "Quantity"
 
@@ -87,3 +87,9 @@ class UserProfileForm(forms.ModelForm):
         widgets = {
             'role': forms.Select(attrs={'class': 'form-control'}),
         }
+    
+
+class StockForm(forms.ModelForm):
+    class Meta:
+        model = Item
+        fields = ['name', 'stock', 'sku', 'reorder_level']        

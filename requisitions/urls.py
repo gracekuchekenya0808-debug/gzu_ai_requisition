@@ -22,8 +22,15 @@ urlpatterns = [
     path('my-requisitions/', views.user_requisition_list, name='user_requisition_list'),
     path('requisition/<int:pk>/print/', views.print_requisition, name='print_requisition'),
     
-    # 👨‍💼 Department User Management (HOD only)
+    # Department User Management (HOD only)
     path('manage-users/', views.manage_department_users, name='manage_department_users'),
     path('add-user/', views.add_department_user, name='add_department_user'),
     path('delete-user/<int:user_id>/', views.delete_department_user, name='delete_department_user'),
+    path('activate-user/<int:user_id>/', views.activate_department_user, name='activate_department_user'),
+    
+    # Admin User Management
+    path('users/activate/<int:user_id>/', views.activate_user, name='activate_user'),
+    path('users/deactivate/<int:user_id>/', views.deactivate_user, name='deactivate_user'),
+    
+    path('add-stock/', views.add_stock, name='add_stock'),
 ]

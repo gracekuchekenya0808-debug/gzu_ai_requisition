@@ -10,18 +10,18 @@
     <div class="d-flex gap-3 mt-4">
 
         <a href="{% url 'requisition_create' %}" class="btn btn-primary">
-            ➕ Create Requisition
+            Create Requisition
         </a>
 
         <!-- Button for viewing requisitions -->
         <a href="{% url 'user_requisition_list' %}" class="btn btn-secondary">
-            📄 View My Requisitions
+            View My Requisitions
         </a>
 
-        <!-- 👨‍💼 Manage Users (HOD only) -->
+        <!-- Manage Users (HOD only) -->
         {% if user.profile.role == 'head' %}
             <a href="{% url 'manage_department_users' %}" class="btn btn-warning">
-                👥 Manage Users
+                Manage Users
             </a>
         {% endif %}
 

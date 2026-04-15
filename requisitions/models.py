@@ -76,7 +76,7 @@ class RequisitionItem(models.Model):
     requisition = models.ForeignKey(
         Requisition,
         on_delete=models.CASCADE,
-        related_name='items'   # ✅ FIXED HERE
+        related_name='items'   # FIXED HERE
     )
     item = models.ForeignKey(Item, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()

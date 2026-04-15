@@ -7,24 +7,24 @@
 <form method="post">
     {% csrf_token %}
 
-    <!-- ✅ AUTO USER -->
+    <!-- AUTO USER -->
     <div class="mb-3">
         <label><strong>Requester:</strong></label>
         <input type="text" class="form-control" value="{{ user.username }}" readonly>
     </div>
 
-    <!-- ✅ AUTO DEPARTMENT -->
+    <!-- AUTO DEPARTMENT -->
     <div class="mb-3">
         <label><strong>Department:</strong></label>
         <input type="text" class="form-control" value="{{ user.profile.department }}" readonly>
     </div>
 
-    <!-- ✅ MAIN FORM (date + notes) -->
+    <!-- MAIN FORM (date + notes) -->
     <div class="card p-3 mb-4 shadow-sm">
         {{ form.as_p }}
     </div>
 
-    <!-- ✅ ITEMS -->
+    <!-- ITEMS -->
     <h4>Items</h4>
 
     {{ formset.management_form }}
@@ -47,7 +47,7 @@
         </div>
     {% endfor %}
 
-    <!-- ✅ SUBMIT -->
+    <!-- SUBMIT -->
     <button type="submit" class="btn btn-success">
         Submit Requisition
     </button>

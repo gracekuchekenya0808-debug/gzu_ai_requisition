@@ -21,26 +21,26 @@
       {% endfor %}
     </ul>
 
-    <!-- 🔘 ACTION BUTTONS -->
+    <!-- ACTION BUTTONS -->
     <div class="d-flex flex-wrap gap-2 mb-3">
 
-      <!-- ✅ PRINT BUTTON (Admin + HOD + Requester) -->
+      <!-- PRINT BUTTON (Admin + HOD + Requester) -->
       {% if user.is_staff or user.profile.role == 'head' or user == req.requester %}
         <a href="{% url 'print_requisition' req.id %}" 
            class="btn btn-secondary">
-           🖨 Print
+           Print
         </a>
       {% endif %}
 
-      <!-- ✅ VIEW STOCK (HOD ONLY) -->
+      <!-- VIEW STOCK (HOD ONLY) -->
       {% if user.profile.role == 'head' %}
         <a href="{% url 'hod_view_stock' %}" 
            class="btn btn-info">
-           📦 View Stock
+           View Stock
         </a>
       {% endif %}
 
-      <!-- ✅ DELETE BUTTON (Admin + HOD) -->
+      <!-- DELETE BUTTON (Admin + HOD) -->
       {% if user.is_staff or user.profile.role == 'head' %}
         {% if req.status != 'approved' %}
           <a href="{% url 'delete_requisition' req.id %}"
@@ -52,7 +52,7 @@
 
     </div>
 
-    <!-- 🔧 ADMIN ACTIONS -->
+    <!-- ADMIN ACTIONS -->
     {% if user.is_staff %}
 
       {% if req.status == 'submitted' %}
@@ -66,7 +66,7 @@
           </div>
 
           <div class="d-flex gap-2">
-            <button class="btn btn-success" type="submit">✔ Approve</button>
+            <button class="btn btn-success" type="submit">Approve</button>
           </div>
         </form>
 
@@ -75,7 +75,7 @@
           <input type="hidden" name="action" value="reject">
 
           <div class="d-flex gap-2">
-            <button class="btn btn-danger" type="submit">✖ Reject</button>
+            <button class="btn btn-danger" type="submit">Reject</button>
           </div>
         </form>
 

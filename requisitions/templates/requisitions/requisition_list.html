@@ -13,11 +13,11 @@
   <div class="d-flex gap-2 mb-3">
 
     <a href="{% url 'requisition_create' %}" class="btn btn-primary">
-        ➕ Create Requisition
+        Create Requisition
     </a>
 
     <a href="{% url 'requisition_list' %}" class="btn btn-secondary">
-        📄 View My Requisitions
+        View My Requisitions
     </a>
 
 </div>
@@ -46,7 +46,7 @@
 
         {% if request.user.is_staff %}
         <td>{{ r.requester.username }}</td>
-        <td>{{ r.department.name }}<td/>
+        <td>{{ r.department.name }}</td>
         {% endif %}
 
         <td>{{ r.created|date:"Y-m-d H:i" }}</td>
@@ -75,7 +75,7 @@
 
     {% empty %}
       <tr>
-        <td colspan="5">No requisitions</td>
+        <td colspan="{% if request.user.is_staff %}6{% else %}4{% endif %}">No requisitions</td>
       </tr>
     {% endfor %}
   </tbody>
