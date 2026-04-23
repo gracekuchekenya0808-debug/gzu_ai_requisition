@@ -5,13 +5,13 @@
 <!-- Hover effect for clickable cards -->
 <style>
 .card:hover {
-    transform: scale(1.05);  /* Slightly grows the card */
-    transition: 0.2s;        /* Smooth animation */
-    cursor: pointer;          /* Shows pointer on hover */
+    transform: scale(1.05);
+    transition: 0.2s;
+    cursor: pointer;
 }
 </style>
 
-<h2 class="mb-4">Dashboard — Demand Insights</h2>
+<h2 class="mb-4">Dashboard — Insights</h2>
 
 <!-- ===== Statistics Cards ===== -->
 
@@ -80,7 +80,10 @@
     Print Requisitions
   </a>
 
-  <!-- Manage Users (HOD only) -->
+  <a href="{% url 'trends' %}" class="btn btn-success">
+    View Trends
+  </a>
+
   {% if user.profile.role == 'head' %}
     <a href="{% url 'manage_department_users' %}" class="btn btn-warning">
       Manage Users
@@ -89,50 +92,5 @@
 
 </div>
 {% endif %}
-
-<!-- ===== Demand Chart ===== -->
-
-<h4 class="mb-3">Item Demand Trends</h4>
-
-<canvas id="demandChart" width="800" height="350"></canvas>
-
-<script>
-fetch("{% url 'dashboard_data' %}")
-  .then(r => r.json())
-  .then(data => {
-
-    const ctx = document.getElementById('demandChart').getContext('2d');
-
-    const datasets = data.datasets.map(ds => ({
-      label: ds.label,
-      data: ds.data,
-      fill: false,
-      tension: 0.1
-    }));
-
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: data.labels,
-        datasets: datasets
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { position: 'top' }
-        }
-      }
-    });
-
-  });
-</script>
-
-<hr>
-
-<!-- ===== AI Forecast Section ===== -->
-
-<h4 class="mt-4">AI Demand Forecast</h4>
-
-<img src="{% url 'arima_forecast' %}" class="img-fluid">
 
 {% endblock %}

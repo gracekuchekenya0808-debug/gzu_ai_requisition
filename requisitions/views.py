@@ -1,42 +1,36 @@
 from statsmodels.tsa.arima.model import ARIMA
 import pandas as pd
-import matplotlib.pyplot as plt
-from io import BytesIO
-from django.http import HttpResponse
-from .models import Requisition, RequisitionItem
+from .models import Requisition, RequisitionItem, Item, Profile, Notification, Approval, Fulfillment
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Count
+from django.db.models import Count, F, Sum
 from django.contrib.auth.models import User
 from django.contrib.admin.views.decorators import staff_member_required
-from django.db.models import F
-from .models import Item
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-import csv
-
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from .models import Requisition, RequisitionItem, Item, Approval
-from .forms import RequisitionForm, RequisitionItemFormSet
-from django.http import JsonResponse
 from django.utils import timezone
-from django.db.models import Sum
 from django.views.decorators.http import require_POST
+from django.views.decorators.cache import never_cache
+import csv
+from io import BytesIO
+from .forms import RequisitionForm, RequisitionItemFormSet, StockForm
+from .analytics import train_arima_model
+import pandas as pd
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from .models import Requisition, RequisitionItem
 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from .forms import RequisitionForm, RequisitionItemFormSet
-from .models import Requisition, RequisitionItem, Item, Profile, Notification
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
-from django.core.exceptions import PermissionDenied
-from .forms import StockForm
+try:
+    import matplotlib
+    matplotlib.use('Agg')  # Use non-GUI backend for server-side chart generation
+    import matplotlib.pyplot as plt
+except ImportError:
+    matplotlib = None
+    plt = None
+
 
 def is_admin_or_head(user):
     return user.is_staff or user.profile.role == 'head'
@@ -109,6 +103,7 @@ def requisition_create(request):
 
 
 @login_required
+@never_cache
 def requisition_detail(request, pk):
     req = get_object_or_404(Requisition, pk=pk)
     user = request.user
@@ -159,56 +154,56 @@ def requisition_approve(request, pk):
     if action == 'approve':
         low_stock_items = []  # track items that go low
 
-    # Loop through all items in requisition
-    for req_item in req.items.all():
-        item = req_item.item
+        # Loop through all items in requisition
+        for req_item in req.items.all():
+            item = req_item.item
 
-        # Prevent approving if stock is not enough
-        if req_item.quantity > item.stock:
-            messages.error(
-                request,
-                f"Not enough stock for {item.name}. Available: {item.stock}"
-            )
-            return redirect('requisition_detail', pk=req.id)
+            # Prevent approving if stock is not enough
+            if req_item.quantity > item.stock:
+                messages.error(
+                    request,
+                    f"Not enough stock for {item.name}. Available: {item.stock}"
+                )
+                return redirect('requisition_detail', pk=req.id)
 
-        # Deduct stock
-        item.stock -= req_item.quantity
-        item.save()
+            # Deduct stock
+            item.stock -= req_item.quantity
+            item.save()
 
-        # Check if stock is low
-        if item.stock <= item.reorder_level:
-            low_stock_items.append(item)
+            # Check if stock is low
+            if item.stock <= item.reorder_level:
+                low_stock_items.append(item)
 
-    # NOW approve (after stock update)
-    req.status = 'approved'
-    req.save()
+        # NOW approve (after stock update)
+        req.status = 'approved'
+        req.save()
 
-    Approval.objects.update_or_create(
-        requisition=req,
-        defaults={
-            'approver': request.user,
-            'approved': True,
-            'comment': comment
-        }
-    )
-
-    messages.success(request, "Requisition approved and stock updated successfully.")
-
-    # Notify HOD(s) if stock is low
-    for item in low_stock_items:
-        hods = Profile.objects.filter(
-            role='head',
-            department=req.department
+        Approval.objects.update_or_create(
+            requisition=req,
+            defaults={
+                'approver': request.user,
+                'approved': True,
+                'comment': comment
+            }
         )
 
-        for hod in hods:
-            Notification.objects.create(
-                user=hod.user,
-                message=f"Low stock alert: {item.name} has only {item.stock} left."
+        messages.success(request, "Requisition approved and stock updated successfully.")
+
+        # Notify HOD(s) if stock is low
+        for item in low_stock_items:
+            hods = Profile.objects.filter(
+                role='head',
+                department=req.department
             )
 
-    subject = f"Requisition #{req.id} Approved"
-    message = f"""
+            for hod in hods:
+                Notification.objects.create(
+                    user=hod.user,
+                    message=f"Low stock alert: {item.name} has only {item.stock} left."
+                )
+
+        subject = f"Requisition #{req.id} Approved"
+        message = f"""
 Hello {req.requester.username},
 
 Your requisition #{req.id} has been APPROVED.
@@ -223,9 +218,62 @@ Comment:
 
 GZU AI Requisition System
 """
-# Mark fulfilled
-@login_required
-@require_POST
+        # Send email notification
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [req.requester.email],
+            fail_silently=True,
+        )
+
+    # ----------------------
+    # REJECT
+    # ----------------------
+    elif action == 'reject':
+        req.status = 'rejected'
+        req.save()
+
+        Approval.objects.update_or_create(
+            requisition=req,
+            defaults={
+                'approver': request.user,
+                'approved': False,
+                'comment': comment
+            }
+        )
+
+        messages.success(request, "Requisition rejected.")
+
+        subject = f"Requisition #{req.id} Rejected"
+        message = f"""
+Hello {req.requester.username},
+
+Your requisition #{req.id} has been REJECTED.
+
+Department: {req.department}
+Rejected by: {request.user.username}
+
+Comment:
+{comment}
+
+GZU AI Requisition System
+"""
+        # Send email notification
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [req.requester.email],
+            fail_silently=True,
+        )
+
+    else:
+        messages.error(request, "Invalid action.")
+        return redirect('requisition_detail', pk=pk)
+
+    return redirect('requisition_detail', pk=pk)
+
 @login_required
 @require_POST
 def requisition_fulfill(request, pk):
@@ -242,15 +290,12 @@ def requisition_fulfill(request, pk):
 
     req.status = 'fulfilled'
     req.save()
-    from .models import Fulfillment, Notification
     Fulfillment.objects.update_or_create(
         requisition=req,
         defaults={'fulfilled_by': request.user}
     )
     messages.success(request, "Requisition marked as fulfilled.")
     return redirect('requisition_detail', pk=pk)
-@login_required
-
 
 @login_required
 def delete_requisition(request, pk):
@@ -285,6 +330,7 @@ def delete_requisition(request, pk):
     return redirect('requisition_list')
 
 @login_required
+@never_cache
 def requisition_list(request):
     user = request.user
     profile = getattr(user, 'profile', None)
@@ -292,16 +338,15 @@ def requisition_list(request):
     # Get filter from URL (e.g. ?status=submitted)
     status_filter = request.GET.get('status')
 
-    # Check profile role FIRST (before is_staff)
+    # Admin/staff should always see all requisitions first.
+    if user.is_staff:
+        qs = Requisition.objects.exclude(status='deleted').order_by('-created')
+
     # HOD → only their department (excluding deleted)
-    if profile and profile.role == 'head' and profile.department:
+    elif profile and profile.role == 'head' and profile.department:
         qs = Requisition.objects.filter(
             department=profile.department
         ).exclude(status='deleted').order_by('-created')
-
-    # Admin → sees ALL requisitions (except deleted)
-    elif user.is_staff:
-        qs = Requisition.objects.exclude(status='deleted').order_by('-created')
 
     # Normal user → only their own (excluding deleted)
     elif profile:
@@ -351,6 +396,75 @@ def dashboard_data(request):
         datasets.append({'label': item, 'data': series})
     return JsonResponse({'labels': labels, 'datasets': datasets})
 
+@login_required
+def demand_chart_image(request):
+    # Render demand chart as PNG image (server-side)
+    if plt is None:
+        return HttpResponse("Matplotlib is not installed on this server.", status=503)
+    try:
+        import pandas as pd
+        
+        # Get the data
+        q = RequisitionItem.objects.select_related('requisition','item').all()
+        rows = []
+        for ri in q:
+            rows.append({'item': ri.item.name, 'date': ri.requisition.created.date(), 'quantity': ri.quantity})
+        
+        if not rows:
+            # Return a simple placeholder image
+            plt.figure(figsize=(10, 6))
+            plt.text(0.5, 0.5, 'No data available for chart', ha='center', va='center', fontsize=14)
+            plt.axis('off')
+            buffer = BytesIO()
+            plt.savefig(buffer, format='png')
+            buffer.seek(0)
+            plt.close()
+            return HttpResponse(buffer.getvalue(), content_type="image/png")
+        
+        df = pd.DataFrame(rows)
+        df['month'] = pd.to_datetime(df['date']).dt.to_period('M').dt.to_timestamp()
+        monthly = df.groupby(['month','item'])['quantity'].sum().reset_index()
+        
+        # Pick top 5 items
+        top_items = monthly.groupby('item')['quantity'].sum().nlargest(5).index.tolist()
+        labels = sorted(monthly['month'].drop_duplicates().dt.strftime('%Y-%m'))
+        
+        # Use timestamp index for reindexing without .dt on PeriodIndex
+        label_index = pd.to_datetime(labels).to_period('M').to_timestamp()
+        
+        plt.figure(figsize=(10, 6))
+        for item in top_items:
+            series = monthly[monthly['item']==item].set_index('month').reindex(
+                label_index, fill_value=0
+            )['quantity'].tolist()
+            plt.plot(labels, series, marker='o', label=item)
+        
+        plt.title('Item Demand Trends')
+        plt.xlabel('Month')
+        plt.ylabel('Quantity')
+        plt.legend(loc='best')
+        plt.grid(True, alpha=0.3)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        # Save to buffer
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        plt.close()
+        
+        return HttpResponse(buffer.getvalue(), content_type="image/png")
+    except Exception as e:
+        # Return error image
+        plt.figure(figsize=(10, 6))
+        plt.text(0.5, 0.5, f'Error generating chart: {str(e)}', ha='center', va='center', fontsize=12)
+        plt.axis('off')
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        plt.close()
+        return HttpResponse(buffer.getvalue(), content_type="image/png")
+
 
 def low_stock_items(request):
 
@@ -362,83 +476,141 @@ def low_stock_items(request):
     )
 
 
+
 @login_required
-@login_required
+@never_cache
 def dashboard(request):
 
     profile = getattr(request.user, 'profile', None)
 
-    # Check profile role FIRST (before is_staff)
-    # HOD
-    if profile and profile.role == 'head':
-        return render(request, 'requisitions/dashboard.html', {
-            'total': Requisition.objects.filter(department=profile.department).count(),
-            'pending': Requisition.objects.filter(status='submitted', department=profile.department).count(),
-            'approved': Requisition.objects.filter(status='approved', department=profile.department).count(),
-            'rejected': Requisition.objects.filter(status='rejected', department=profile.department).count()
-        })
-
-    # Admin
+    # ---------- COUNTS ----------
     if request.user.is_staff:
-        return render(request, 'requisitions/dashboard.html', {
-            'total': Requisition.objects.count(),
-            'pending': Requisition.objects.filter(status='submitted').count(),
-            'approved': Requisition.objects.filter(status='approved').count(),
-            'rejected': Requisition.objects.filter(status='rejected').count()
-        })
+        qs = Requisition.objects.all()
+    elif profile and profile.role == 'head':
+        qs = Requisition.objects.filter(department=profile.department)
+    else:
+        return redirect('user_home')
 
-    # NORMAL USER
-    return redirect('user_home')
+    total = qs.count()
+    pending = qs.filter(status='submitted').count()
+    approved = qs.filter(status='approved').count()
+    rejected = qs.filter(status='rejected').count()
 
-@login_required    
-def arima_forecast(request):
-
-    # Get requisition items with requisition date
+    # ---------- TREND DATA ----------
     data = RequisitionItem.objects.values(
         'requisition__created',
         'quantity'
     )
 
-    # Convert to DataFrame
+    df = pd.DataFrame(data)
+
+    history = []
+    forecast = []
+
+    if not df.empty:
+        df['created'] = pd.to_datetime(df['requisition__created'])
+
+        monthly_data = df.groupby(
+            pd.Grouper(key='created', freq='M')
+        )['quantity'].sum()
+
+        history = monthly_data.tolist()
+
+        # ARIMA or fallback
+        if len(monthly_data) >= 3:
+            try:
+                model_fit, forecast_series = train_arima_model(monthly_data)
+                forecast = forecast_series.tolist()
+            except:
+                last_value = history[-1]
+                forecast = [last_value, last_value, last_value]
+        else:
+            last_value = history[-1] if history else 0
+            forecast = [last_value, last_value, last_value]
+
+    # ---------- RENDER ONCE ----------
+    return render(request, 'requisitions/dashboard.html', {
+        'total': total,
+        'pending': pending,
+        'approved': approved,
+        'rejected': rejected,
+        'history': history,
+        'forecast': forecast
+    })
+from django.http import JsonResponse
+import pandas as pd
+from .models import RequisitionItem
+from .analytics import train_arima_model
+
+def arima_forecast(request):
+    if plt is None:
+        return HttpResponse("Matplotlib is not installed on this server.", status=503)
+
+    data = RequisitionItem.objects.values(
+        'requisition__created',
+        'quantity'
+    )
+
     df = pd.DataFrame(data)
 
     if df.empty:
-        return HttpResponse("Not enough data for forecasting.")
+        return HttpResponse("No data available for forecast.", status=204)
 
-    # Convert date column
     df['created'] = pd.to_datetime(df['requisition__created'])
 
-    # Aggregate quantity per month
     monthly_data = df.groupby(
-        pd.Grouper(key='created', freq='M')
+        pd.Grouper(key='created', freq='ME')
     )['quantity'].sum()
 
-    # Fit ARIMA model
-    model = ARIMA(monthly_data, order=(1,1,1))
-    model_fit = model.fit()
+    # Create chart
+    plt.figure(figsize=(10, 6))
 
-    # Forecast next 3 months
-    forecast = model_fit.forecast(steps=3)
+    # Plot historical data
+    plt.plot(range(len(monthly_data)), monthly_data.values, marker='o', 
+             label='Historical Demand', linewidth=2, color='blue')
 
-    # Plot historical + forecast
-    plt.figure(figsize=(8,5))
+    # -------------------------------
+    # CASE 1: Not enough data
+    # -------------------------------
+    if len(monthly_data) < 3:
+        last_value = monthly_data.iloc[-1] if len(monthly_data) > 0 else 0
+        forecast = [last_value, last_value, last_value]
+    else:
+        # -------------------------------
+        # CASE 2: ARIMA
+        # -------------------------------
+        try:
+            model_fit, forecast_series = train_arima_model(monthly_data)
+            forecast = forecast_series.tolist()
+        except Exception:
+            # -------------------------------
+            # CASE 3: ARIMA fails - fallback
+            # -------------------------------
+            last_value = monthly_data.iloc[-1]
+            forecast = [last_value, last_value, last_value]
 
-    monthly_data.plot(label="Historical Demand")
-    forecast.plot(label="Predicted Demand")
+    # Plot forecast (next 3 months)
+    forecast_x = range(len(monthly_data), len(monthly_data) + len(forecast))
+    plt.plot(forecast_x, forecast, marker='s', linestyle='--', 
+             label='Predicted Demand', linewidth=2, color='red')
 
-    plt.title("AI Requisition Demand Forecast")
-    plt.xlabel("Month")
-    plt.ylabel("Quantity")
-    plt.legend()
+    # Add vertical line to separate history from forecast
+    plt.axvline(x=len(monthly_data) - 0.5, color='gray', linestyle=':', alpha=0.7)
 
-    # Save graph to memory
+    plt.title('AI Requisition Demand Forecast')
+    plt.xlabel('Month')
+    plt.ylabel('Quantity')
+    plt.legend(loc='best')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    # Save to buffer and return PNG
     buffer = BytesIO()
     plt.savefig(buffer, format='png')
     buffer.seek(0)
     plt.close()
 
     return HttpResponse(buffer.getvalue(), content_type="image/png")
-
 @staff_member_required
 def user_list(request):
     users = User.objects.select_related('profile').all()
@@ -520,7 +692,6 @@ def user_requisition_list(request):
     qs = Requisition.objects.filter(requester=user).order_by('-created')
     return render(request, 'requisitions/user_requisition_list.html', {'requisitions': qs})
 
-@login_required
 @login_required
 def print_requisition(request, pk):
     req = get_object_or_404(Requisition, pk=pk)
@@ -765,3 +936,123 @@ def add_stock(request):
         form = StockForm()
     
     return render(request, 'requisitions/add_stock.html', {'form': form })
+
+@login_required
+def trends_view(request):
+    profile = getattr(request.user, 'profile', None)
+    req_items = RequisitionItem.objects.select_related('requisition', 'item')
+
+    # HOD sees their own department trends; admin sees all departments.
+    if profile and profile.role == 'head' and profile.department:
+        req_items = req_items.filter(requisition__department=profile.department)
+
+    rows = []
+    for ri in req_items:
+        rows.append(
+            {
+                'item': ri.item.name,
+                'date': ri.requisition.created.date(),
+                'quantity': ri.quantity,
+            }
+        )
+
+    if not rows:
+        return render(
+            request,
+            'requisitions/trends.html',
+            {
+                'top_item_names': [],
+                'top_item_totals': [],
+                'chosen_item_name': '',
+                'history_labels': [],
+                'history_values': [],
+                'forecast_labels': [],
+                'forecast_values': [],
+                'future_item_names': [],
+                'future_item_totals': [],
+            },
+        )
+
+    df = pd.DataFrame(rows)
+    df['month'] = pd.to_datetime(df['date']).dt.to_period('M').dt.to_timestamp()
+
+    item_totals = (
+        df.groupby('item')['quantity']
+        .sum()
+        .sort_values(ascending=False)
+    )
+    top_items = item_totals.head(5).index.tolist()
+
+    top_item_names = top_items
+    top_item_totals = [int(item_totals[item]) for item in top_items]
+    chosen_item_name = top_items[0] if top_items else ''
+
+    # Build ARIMA forecast per top item to estimate future most-requested items.
+    future_item_totals = {}
+    chosen_item_history_labels = []
+    chosen_item_history_values = []
+    chosen_item_forecast_labels = []
+    chosen_item_forecast_values = []
+
+    for idx, item_name in enumerate(top_items):
+        item_df = df[df['item'] == item_name]
+        monthly_data = (
+            item_df.groupby('month')['quantity']
+            .sum()
+            .sort_index()
+            .asfreq('MS', fill_value=0)
+        )
+
+        history_values = [int(v) for v in monthly_data.tolist()]
+        history_labels = [d.strftime('%Y-%m') for d in monthly_data.index]
+
+        if len(monthly_data) >= 3:
+            try:
+                _, forecast_series = train_arima_model(monthly_data)
+                forecast_values = [max(0, int(round(v))) for v in forecast_series.tolist()]
+            except Exception:
+                last_value = history_values[-1] if history_values else 0
+                forecast_values = [last_value, last_value, last_value]
+        else:
+            last_value = history_values[-1] if history_values else 0
+            forecast_values = [last_value, last_value, last_value]
+
+        future_item_totals[item_name] = int(sum(forecast_values))
+
+        # Keep one top item detailed line chart (the most requested one).
+        if idx == 0:
+            chosen_item_history_labels = history_labels
+            chosen_item_history_values = history_values
+            if monthly_data.index.size:
+                last_month = monthly_data.index[-1]
+                chosen_item_forecast_labels = [
+                    (last_month + pd.DateOffset(months=i)).strftime('%Y-%m')
+                    for i in range(1, len(forecast_values) + 1)
+                ]
+            else:
+                chosen_item_forecast_labels = [
+                    f'Future {i}' for i in range(1, len(forecast_values) + 1)
+                ]
+            chosen_item_forecast_values = forecast_values
+
+    sorted_future_items = sorted(
+        future_item_totals.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    future_item_names = [name for name, _ in sorted_future_items]
+    future_item_values = [value for _, value in sorted_future_items]
+
+    context = {
+        'top_item_names': top_item_names,
+        'top_item_totals': top_item_totals,
+        'chosen_item_name': chosen_item_name,
+        'history_labels': chosen_item_history_labels,
+        'history_values': chosen_item_history_values,
+        'forecast_labels': chosen_item_forecast_labels,
+        'forecast_values': chosen_item_forecast_values,
+        'future_item_names': future_item_names,
+        'future_item_totals': future_item_values,
+    }
+
+    return render(request, 'requisitions/trends.html', context)
